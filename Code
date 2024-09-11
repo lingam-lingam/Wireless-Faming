@@ -1,0 +1,80 @@
+#include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
+#include <DHT.h>
+
+// Define sensor pins
+#define RAIN_SENSOR_PIN D1
+#define SOIL_MOISTURE_PIN D3
+#define DHT_PIN D2
+
+// Define DHT sensor type
+#define DHT_TYPE DHT11
+
+DHT dht(DHT_PIN, DHT_TYPE);
+
+// Replace with your network credentials
+const char* ssid = "your_SSID";
+const char* password = "your_PASSWORD";
+
+// Replace with your server address and endpoint
+const char* serverName = "http://your-server-address/endpoint";
+
+void setup() {
+  Serial.begin(115200);
+  delay(10);
+
+  // Initialize DHT sensor
+  dht.begin();
+
+  // Connect to Wi-Fi
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("Connected to Wi-Fi");
+}
+
+void loop() {
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+
+    // Read sensors
+    int rainSensorValue = digitalRead(RAIN_SENSOR_PIN);
+    int soilMoistureValue = analogRead(SOIL_MOISTURE_PIN);
+    float temperature = dht.readTemperature();
+    float humidity = dht.readHumidity();
+
+    // Check if any reads failed and exit
+    if (isnan(temperature) || isnan(humidity)) {
+      Serial.println("Failed to read from DHT sensor!");
+      return;
+    }
+
+    // Prepare data to send
+    String postData = "rainSensor=" + String(rainSensorValue) +
+                      "&soilMoisture=" + String(soilMoistureValue) +
+                      "&temperature=" + String(temperature) +
+                      "&humidity=" + String(humidity);
+
+    // Specify the server URL and make POST request
+    http.begin(serverName);
+    http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+
+    int httpResponseCode = http.POST(postData);
+    if (httpResponseCode > 0) {
+      String response = http.getString();
+      Serial.println("Response code: " + String(httpResponseCode));
+      Serial.println("Response: " + response);
+    } else {
+      Serial.println("Error on HTTP request");
+    }
+
+    http.end(); // Free resources
+  } else {
+    Serial.println("Error in WiFi connection");
+  }
+
+  // Delay before the next read
+  delay(60000); // Wait 60 seconds
+}
